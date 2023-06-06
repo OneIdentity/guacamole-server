@@ -199,4 +199,3 @@ EXPOSE 4822
 # PREFIX_DIR build argument.
 #
 CMD /opt/guacamole/sbin/guacd -b 0.0.0.0 -L $GUACD_LOG_LEVEL -f
-
