@@ -44,6 +44,7 @@ libguacinc_HEADERS =                  \
     guacamole/client-types.h          \
     guacamole/error.h                 \
     guacamole/error-types.h           \
+    guacamole/fips.h                  \
     guacamole/hash.h                  \
     guacamole/layer.h                 \
     guacamole/layer-types.h           \
@@ -59,6 +60,7 @@ libguacinc_HEADERS =                  \
     guacamole/protocol.h              \
     guacamole/protocol-constants.h    \
     guacamole/protocol-types.h        \
+    guacamole/recording.h             \
     guacamole/socket-constants.h      \
     guacamole/socket.h                \
     guacamole/socket-fntypes.h        \
@@ -92,6 +94,7 @@ libguac_la_SOURCES =   \
     encode-jpeg.c      \
     encode-png.c       \
     error.c            \
+    fips.c             \
     hash.c             \
     id.c               \
     palette.c          \
@@ -99,6 +102,7 @@ libguac_la_SOURCES =   \
     pool.c             \
     protocol.c         \
     raw_encoder.c      \
+    recording.c        \
     socket.c           \
     socket-broadcast.c \
     socket-fd.c        \
@@ -135,7 +139,7 @@ libguac_la_CFLAGS = \
     -Werror -Wall -pedantic
 
 libguac_la_LDFLAGS =     \
-    -version-info 19:0:0 \
+    -version-info 22:0:1 \
     -no-undefined        \
     @CAIRO_LIBS@         \
     @DL_LIBS@            \

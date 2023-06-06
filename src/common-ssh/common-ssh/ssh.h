@@ -40,7 +40,7 @@
  *     A newly-allocated string containing the credentials provided by
  *     the user, which must be freed by a call to free().
  */
-typedef char* guac_ssh_credential_handler(guac_client* client, char* cred_name, _Bool echo);
+typedef char* guac_ssh_credential_handler(guac_client* client, char* cred_name);
 
 /**
  * An SSH session, backed by libssh2 and associated with a particular
@@ -152,4 +152,3 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
 void guac_common_ssh_destroy_session(guac_common_ssh_session* session);
 
 #endif
-

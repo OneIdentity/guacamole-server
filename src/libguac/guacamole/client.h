@@ -509,17 +509,46 @@ void* guac_client_for_user(guac_client* client, guac_user* user,
         guac_user_callback* callback, void* data);
 
 /**
- * Marks the end of the current frame by sending a "sync" instruction to
- * all connected users. This instruction will contain the current timestamp.
- * The last_sent_timestamp member of guac_client will be updated accordingly.
+ * Marks the end of the current frame by sending a "sync" instruction to all
+ * connected users, where the number of input frames that were considered in
+ * creating this frame is either unknown or inapplicable. This instruction will
+ * contain the current timestamp. The last_sent_timestamp member of guac_client
+ * will be updated accordingly.
  *
  * If an error occurs sending the instruction, a non-zero value is
  * returned, and guac_error is set appropriately.
  *
- * @param client The guac_client which has finished a frame.
- * @return Zero on success, non-zero on error.
+ * @param client
+ *     The guac_client which has finished a frame.
+ *
+ * @return
+ *     Zero on success, non-zero on error.
  */
 int guac_client_end_frame(guac_client* client);
+
+/**
+ * Marks the end of the current frame by sending a "sync" instruction to all
+ * connected users, where that frame may combine or otherwise represent the
+ * changes of an arbitrary number of input frames. This instruction will
+ * contain the current timestamp, as well as the number of frames that were
+ * considered in creating that frame.  The last_sent_timestamp member of
+ * guac_client will be updated accordingly.
+ *
+ * If an error occurs sending the instruction, a non-zero value is
+ * returned, and guac_error is set appropriately.
+ *
+ * @param client
+ *     The guac_client which has finished a frame.
+ *
+ * @param frames
+ *     The number of distinct frames that were considered or combined when
+ *     generating the current frame, or zero if the boundaries of relevant
+ *     frames are unknown.
+ *
+ * @return
+ *     Zero on success, non-zero on error.
+ */
+int guac_client_end_multiple_frames(guac_client* client, int frames);
 
 /**
  * Initializes the given guac_client using the initialization routine provided
@@ -709,6 +738,21 @@ void guac_client_stream_webp(guac_client* client, guac_socket* socket,
         cairo_surface_t* surface, int quality, int lossless);
 
 /**
+ * Returns whether the owner of the given client supports the "msg"
+ * instruction, returning non-zero if the client owner does support the
+ * instruction, or zero if the owner does not.
+ * 
+ * @param client
+ *     The Guacamole client whose owner should be checked for supporting
+ *     the "msg" instruction.
+ * 
+ * @return 
+ *     Non-zero if the owner of the given client supports the "msg"
+ *     instruction, zero otherwise.
+ */
+int guac_client_owner_supports_msg(guac_client* client);
+
+/**
  * Returns whether the owner of the given client supports the "required"
  * instruction, returning non-zero if the client owner does support the
  * instruction, or zero if the owner does not.
@@ -722,6 +766,42 @@ void guac_client_stream_webp(guac_client* client, guac_socket* socket,
  *     instruction, zero otherwise.
  */
 int guac_client_owner_supports_required(guac_client* client);
+
+/**
+ * Notifies the owner of the given client that a user has joined the connection,
+ * and returns zero if the message was sent successfully, or non-zero if the
+ * notification failed.
+ *
+ * @param client
+ *     The Guacamole Client whose owner should be notified of a user joining
+ *     the connection.
+ *
+ * @param joiner
+ *     The Guacamole User who joined the connection.
+ * 
+ * @return
+ *     Zero if the notification to the owner was sent successfully, or non-zero
+ *     if an error occurred.
+ */
+int guac_client_owner_notify_join(guac_client* client, guac_user* joiner);
+
+/**
+ * Notifies the owner of the given client that a user has left the connection,
+ * and returns zero if the message was sent successfully, or non-zero if the
+ * notification failed.
+ *
+ * @param client
+ *     The Guacamole Client whose owner should be notified of a user leaving
+ *     the connection.
+ *
+ * @param quitter
+ *     The Guacamole User who left the connection.
+ * 
+ * @return
+ *     Zero if the notification to the owner was sent successfully, or non-zero
+ *     if an error occurred.
+ */
+int guac_client_owner_notify_leave(guac_client* client, guac_user* quitter);
 
 /**
  * Returns whether all users of the given client support WebP. If any user does
