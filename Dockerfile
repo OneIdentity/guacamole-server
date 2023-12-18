@@ -26,6 +26,8 @@ ARG ALPINE_BASE_IMAGE=latest
 FROM alpine:${ALPINE_BASE_IMAGE} AS builder
 
 # Install build dependencies
+apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing openssl1.1-compat-dev
+
 RUN apk add --no-cache                \
         autoconf                      \
         automake                      \
@@ -40,7 +42,6 @@ RUN apk add --no-cache                \
         libtool                       \
         libwebp-dev                   \
         make                          \
-        openssl1.1-compat             \
         pango-dev                     \
         pulseaudio-dev                \
         util-linux-dev
