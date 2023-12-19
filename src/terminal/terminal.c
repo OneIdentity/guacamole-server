@@ -46,8 +46,10 @@
 
 #include <guacamole/client.h>
 #include <guacamole/error.h>
+#include <guacamole/mem.h>
 #include <guacamole/protocol.h>
 #include <guacamole/socket.h>
+#include <guacamole/string.h>
 #include <guacamole/timestamp.h>
 
 /**
@@ -318,7 +320,7 @@ void* guac_terminal_thread(void* data) {
 guac_terminal_options* guac_terminal_options_create(
         int width, int height, int dpi) {
 
-    guac_terminal_options* options = malloc(sizeof(guac_terminal_options));
+    guac_terminal_options* options = guac_mem_alloc(sizeof(guac_terminal_options));
 
     /* Set all required parameters */
     options->width = width;
@@ -448,22 +450,22 @@ guac_terminal* guac_terminal_create(guac_client* client,
 
     /* Initialized by guac_terminal_parse_color_scheme. */
     guac_terminal_color (*default_palette)[256] = (guac_terminal_color(*)[256])
-            malloc(sizeof(guac_terminal_color[256]));
+            guac_mem_alloc(sizeof(guac_terminal_color[256]));
 
     guac_terminal_parse_color_scheme(client, options->color_scheme,
                                      &default_char.attributes.foreground,
                                      &default_char.attributes.background,
                                      default_palette);
 
-    guac_terminal* term = malloc(sizeof(guac_terminal));
+    guac_terminal* term = guac_mem_alloc(sizeof(guac_terminal));
     term->started = false;
     term->client = client;
     term->upload_path_handler = NULL;
     term->file_download_handler = NULL;
 
     /* Copy initially-provided color scheme and font details */
-    term->color_scheme = strdup(options->color_scheme);
-    term->font_name = strdup(options->font_name);
+    term->color_scheme = guac_strdup(options->color_scheme);
+    term->font_name = guac_strdup(options->font_name);
     term->font_size = options->font_size;
 
     /* Init modified flag and conditional */
@@ -495,7 +497,7 @@ guac_terminal* guac_terminal_create(guac_client* client,
     /* Fail if display init failed */
     if (term->display == NULL) {
         guac_client_log(client, GUAC_LOG_DEBUG, "Display initialization failed");
-        free(term);
+        guac_mem_free(term);
         return NULL;
     }
 
@@ -534,7 +536,7 @@ guac_terminal* guac_terminal_create(guac_client* client,
     if (pipe(term->stdin_pipe_fd)) {
         guac_error = GUAC_STATUS_SEE_ERRNO;
         guac_error_message = "Unable to open pipe for STDIN";
-        free(term);
+        guac_mem_free(term);
         return NULL;
     }
 
@@ -572,6 +574,7 @@ guac_terminal* guac_terminal_create(guac_client* client,
     /* All keyboard modifiers are released */
     term->mod_alt   =
     term->mod_ctrl  =
+    term->mod_meta  =
     term->mod_shift = 0;
 
     /* Initialize mouse cursor */
@@ -634,14 +637,14 @@ void guac_terminal_free(guac_terminal* term) {
     guac_terminal_scrollbar_free(term->scrollbar);
 
     /* Free copies of font and color scheme information */
-    free((char*) term->color_scheme);
-    free((char*) term->font_name);
+    guac_mem_free_const(term->color_scheme);
+    guac_mem_free_const(term->font_name);
 
     /* Free clipboard */
     guac_common_clipboard_free(term->clipboard);
 
     /* Free the terminal itself */
-    free(term);
+    guac_mem_free(term);
 
 }
 
@@ -864,7 +867,7 @@ char* guac_terminal_prompt(guac_terminal* terminal, const char* title,
     buffer[pos] = 0;
 
     /* Return newly-allocated string containing result */
-    return strdup(buffer);
+    return guac_strdup(buffer);
 
 }
 
@@ -1574,19 +1577,30 @@ static int __guac_terminal_send_key(guac_terminal* term, int keysym, int pressed
     }
 
     /* Track modifiers */
-    if (keysym == 0xFFE3)
+    if (keysym == 0xFFE3 || keysym == 0xFFE4)
         term->mod_ctrl = pressed;
-    else if (keysym == 0xFFE9)
+    else if (keysym == 0xFFE7 || keysym == 0xFFE8)
+        term->mod_meta = pressed;
+    else if (keysym == 0xFFE9 || keysym == 0xFFEA)
         term->mod_alt = pressed;
-    else if (keysym == 0xFFE1)
+    else if (keysym == 0xFFE1 || keysym == 0xFFE2)
         term->mod_shift = pressed;
         
     /* If key pressed */
     else if (pressed) {
 
-        /* Ctrl+Shift+V shortcut for paste */
-        if (keysym == 'V' && term->mod_ctrl)
+        /* Ctrl+Shift+V or Cmd+v (mac style) shortcuts for paste */
+        if ((keysym == 'V' && term->mod_ctrl) || (keysym == 'v' && term->mod_meta))
             return guac_terminal_send_data(term, term->clipboard->buffer, term->clipboard->length);
+
+        /*
+         * Ctrl+Shift+C and Cmd+c shortcuts for copying are not handled, as
+         * selecting text in the terminal automatically copies it. To avoid
+         * attempts to use these shortcuts causing unexpected results in the
+         * terminal, these are just ignored.
+         */
+        if ((keysym == 'C' && term->mod_ctrl) || (keysym == 'c' && term->mod_meta))
+            return 0;
 
         /* Shift+PgUp / Shift+PgDown shortcuts for scrolling */
         if (term->mod_shift) {
@@ -2041,18 +2055,47 @@ int guac_terminal_create_typescript(guac_terminal* term, const char* path,
 
 }
 
-void guac_terminal_dup(guac_terminal* term, guac_user* user,
-        guac_socket* socket) {
+/**
+ * Synchronize the state of the provided terminal to a subset of users of
+ * the provided guac_client using the provided socket.
+ *
+ * @param client
+ *     The client whose users should be synchronized.
+ *
+ * @param term
+ *     The terminal state that should be synchronized to the users.
+ *
+ * @param socket
+ *     The socket that should be used to communicate with the users.
+ */
+static void __guac_terminal_sync_socket(
+        guac_client* client, guac_terminal* term, guac_socket* socket) {
 
     /* Synchronize display state with new user */
     guac_terminal_repaint_default_layer(term, socket);
-    guac_terminal_display_dup(term->display, user, socket);
+    guac_terminal_display_dup(term->display, client, socket);
 
     /* Synchronize mouse cursor */
-    guac_common_cursor_dup(term->cursor, user, socket);
+    guac_common_cursor_dup(term->cursor, client, socket);
 
-    /* Paint scrollbar for joining user */
-    guac_terminal_scrollbar_dup(term->scrollbar, user, socket);
+    /* Paint scrollbar for joining users */
+    guac_terminal_scrollbar_dup(term->scrollbar, client, socket);
+
+}
+
+void guac_terminal_dup(guac_terminal* term, guac_user* user,
+        guac_socket* socket) {
+
+    /* Ignore the user and just use the provided socket directly */
+    __guac_terminal_sync_socket(user->client, term, socket);
+
+}
+
+void guac_terminal_sync_users(
+        guac_terminal* term, guac_client* client, guac_socket* socket) {
+
+    /* Use the provided socket to synchronize state to the users */
+    __guac_terminal_sync_socket(client, term, socket);
 
 }
 
@@ -2084,8 +2127,8 @@ void guac_terminal_apply_color_scheme(guac_terminal* terminal,
     guac_terminal_lock(terminal);
 
     /* Update stored copy of color scheme */
-    free((char*) terminal->color_scheme);
-    terminal->color_scheme = strdup(color_scheme);
+    guac_mem_free_const(terminal->color_scheme);
+    terminal->color_scheme = guac_strdup(color_scheme);
 
     /* Release terminal */
     guac_terminal_unlock(terminal);
@@ -2123,7 +2166,7 @@ void guac_terminal_apply_font(guac_terminal* terminal, const char* font_name,
 
     /* Update stored copy of font name, if changed */
     if (font_name != NULL)
-        terminal->font_name = strdup(font_name);
+        terminal->font_name = guac_strdup(font_name);
 
     /* Update stored copy of font size, if changed */
     if (font_size != -1)

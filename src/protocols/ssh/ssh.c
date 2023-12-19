@@ -35,6 +35,7 @@
 #include <libssh2.h>
 #include <libssh2_sftp.h>
 #include <guacamole/client.h>
+#include <guacamole/mem.h>
 #include <guacamole/recording.h>
 #include <guacamole/socket.h>
 #include <guacamole/timestamp.h>
@@ -133,6 +134,32 @@ static guac_common_ssh_user* guac_ssh_get_user(guac_client* client) {
                 "Auth key successfully imported.");
 
     } /* end if key given */
+
+    if (settings->public_key_base64 != NULL) {
+
+        guac_client_log(client, GUAC_LOG_DEBUG,
+                "Attempting public key import");
+
+        /* Attempt to read public key */
+        if (guac_common_ssh_user_import_public_key(user,
+                    settings->public_key_base64)) {
+
+             /* If failing*/
+                 guac_client_abort(client,
+                        GUAC_PROTOCOL_STATUS_CLIENT_UNAUTHORIZED,
+                        "Auth public key import failed: %s",
+                         guac_common_ssh_key_error());
+
+                 guac_common_ssh_destroy_user(user);
+                 return NULL;
+
+        }
+
+        /* Success */
+        guac_client_log(client, GUAC_LOG_INFO,
+                "Auth public key successfully imported.");
+
+    }
 
     /* If available, get password from settings */
     else if (settings->password != NULL) {
@@ -256,7 +283,7 @@ void* ssh_client_thread(void* data) {
     ssh_client->term = guac_terminal_create(client, options);
 
     /* Free options struct now that it's been used */
-    free(options);
+    guac_mem_free(options);
 
     /* Fail if terminal init failed */
     if (ssh_client->term == NULL) {

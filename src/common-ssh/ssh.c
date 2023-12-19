@@ -23,6 +23,8 @@
 
 #include <guacamole/client.h>
 #include <guacamole/fips.h>
+#include <guacamole/mem.h>
+#include <guacamole/string.h>
 #include <libssh2.h>
 
 #ifdef LIBSSH2_USES_GCRYPT
@@ -120,7 +122,7 @@ static void guac_common_ssh_openssl_init_locks(int count) {
 
     /* Allocate required number of locks */
     guac_common_ssh_openssl_locks =
-        malloc(sizeof(pthread_mutex_t) * count);
+        guac_mem_alloc(sizeof(pthread_mutex_t), count);
 
     /* Initialize each lock */
     for (i=0; i < count; i++)
@@ -147,7 +149,7 @@ static void guac_common_ssh_openssl_free_locks(int count) {
         pthread_mutex_destroy(&(guac_common_ssh_openssl_locks[i]));
 
     /* Free lock array */
-    free(guac_common_ssh_openssl_locks);
+    guac_mem_free(guac_common_ssh_openssl_locks);
 
 }
 #endif
@@ -251,7 +253,7 @@ static void guac_common_ssh_kbd_callback(const char *name, int name_len,
     /* Send password if only one prompt */
     if (num_prompts == 1) {
         char* password = common_session->user->password;
-        responses[0].text = strdup(password);
+        responses[0].text = guac_strdup(password);
         responses[0].length = strlen(password);
     }
 
@@ -283,6 +285,8 @@ static int guac_common_ssh_authenticate(guac_common_ssh_session* common_session)
 
     /* Get user credentials */
     guac_common_ssh_key* key = user->private_key;
+
+    char* public_key = user->public_key;
 
     /* Validate username provided */
     if (user->username == NULL) {
@@ -317,9 +321,11 @@ static int guac_common_ssh_authenticate(guac_common_ssh_session* common_session)
             return 1;
         }
 
+        int public_key_length = public_key == NULL ? 0 : strlen(public_key);
+
         /* Attempt public key auth */
         if (libssh2_userauth_publickey_frommemory(session, user->username,
-                    username_len, NULL, 0, key->private_key,
+                    username_len, public_key, public_key_length, key->private_key,
                     key->private_key_length, key->passphrase)) {
 
             /* Abort on failure */
@@ -488,7 +494,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
 
     /* Allocate new session */
     guac_common_ssh_session* common_session =
-        malloc(sizeof(guac_common_ssh_session));
+        guac_mem_alloc(sizeof(guac_common_ssh_session));
 
     /* Open SSH session */
     LIBSSH2_SESSION* session = libssh2_session_init_ex(NULL, NULL,
@@ -496,7 +502,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
     if (session == NULL) {
         guac_client_abort(client, GUAC_PROTOCOL_STATUS_SERVER_ERROR,
                 "Session allocation failed.");
-        free(common_session);
+        guac_mem_free(common_session);
         close(fd);
         return NULL;
     }
@@ -516,7 +522,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
     if (libssh2_session_handshake(session, fd)) {
         guac_client_abort(client, GUAC_PROTOCOL_STATUS_UPSTREAM_ERROR,
                 "SSH handshake failed.");
-        free(common_session);
+        guac_mem_free(common_session);
         close(fd);
         return NULL;
     }
@@ -529,7 +535,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
     if (!remote_hostkey) {
         guac_client_abort(client, GUAC_PROTOCOL_STATUS_SERVER_ERROR,
             "Failed to get host key for %s", hostname);
-        free(common_session);
+        guac_mem_free(common_session);
         close(fd);
         return NULL;
     }
@@ -552,7 +558,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
             guac_client_abort(client, GUAC_PROTOCOL_STATUS_SERVER_ERROR,
                 "Host key did not match any provided known host keys. %s", err_msg);
 
-        free(common_session);
+        guac_mem_free(common_session);
         close(fd);
         return NULL;
     }
@@ -566,7 +572,7 @@ guac_common_ssh_session* guac_common_ssh_create_session(guac_client* client,
 
     /* Attempt authentication */
     if (guac_common_ssh_authenticate(common_session)) {
-        free(common_session);
+        guac_mem_free(common_session);
         close(fd);
         return NULL;
     }
@@ -597,6 +603,6 @@ void guac_common_ssh_destroy_session(guac_common_ssh_session* session) {
     libssh2_session_free(session->session);
 
     /* Free all other data */
-    free(session);
+    guac_mem_free(session);
 
 }

@@ -24,6 +24,7 @@
 #include "terminal/terminal.h"
 
 #include <guacamole/client.h>
+#include <guacamole/mem.h>
 #include <guacamole/protocol.h>
 #include <guacamole/recording.h>
 #include <guacamole/timestamp.h>
@@ -424,9 +425,29 @@ static telnet_t* __guac_telnet_create_session(guac_client* client) {
                 NI_NUMERICHOST | NI_NUMERICSERV)))
             guac_client_log(client, GUAC_LOG_DEBUG, "Unable to resolve host: %s", gai_strerror(retval));
 
-        /* Connect */
-        if (connect(fd, current_address->ai_addr,
-                        current_address->ai_addrlen) == 0) {
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(fd, &fdset);
+
+        struct timeval timeout_tv;
+        timeout_tv.tv_sec = settings->timeout;
+        timeout_tv.tv_usec = 0;
+
+        if (connect(fd, current_address->ai_addr, current_address->ai_addrlen) < 0) {
+            guac_client_abort(client, GUAC_PROTOCOL_STATUS_SERVER_ERROR,
+                "Failed to connect: %s", strerror(errno));
+            return NULL;
+        }
+        
+        retval = select(fd + 1, NULL, &fdset, NULL, &timeout_tv);
+
+        if (retval == 0) {
+            guac_client_log(client, GUAC_LOG_ERROR, "Timeout connecting to "
+                    "host %s, port %s", connected_address, connected_port);
+            continue;
+        }
+
+        else if (retval > 0) {
 
             guac_client_log(client, GUAC_LOG_DEBUG, "Successfully connected to "
                     "host %s, port %s", connected_address, connected_port);
@@ -604,7 +625,7 @@ void* guac_telnet_client_thread(void* data) {
     telnet_client->term = guac_terminal_create(client, options);
 
     /* Free options struct now that it's been used */
-    free(options);
+    guac_mem_free(options);
 
     /* Fail if terminal init failed */
     if (telnet_client->term == NULL) {
