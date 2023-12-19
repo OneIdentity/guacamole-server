@@ -22,6 +22,7 @@
 #include "common/surface.h"
 
 #include <guacamole/client.h>
+#include <guacamole/mem.h>
 #include <guacamole/socket.h>
 
 #include <pthread.h>
@@ -37,20 +38,20 @@
  *     The head element of the linked list of layers to synchronize, which may
  *     be NULL if the list is currently empty.
  *
- * @param user
- *     The user receiving the layers.
+ * @param client
+ *     The client associated with the users receiving the layers.
  *
  * @param socket
  *     The socket over which each layer should be sent.
  */
 static void guac_common_display_dup_layers(guac_common_display_layer* layers,
-        guac_user* user, guac_socket* socket) {
+        guac_client* client, guac_socket* socket) {
 
     guac_common_display_layer* current = layers;
 
     /* Synchronize all surfaces in given list */
     while (current != NULL) {
-        guac_common_surface_dup(current->surface, user, socket);
+        guac_common_surface_dup(current->surface, client, socket);
         current = current->next;
     }
 
@@ -92,7 +93,7 @@ static void guac_common_display_free_layers(guac_common_display_layer* layers,
             guac_client_free_layer(client, layer);
 
         /* Free current element and advance to next */
-        free(current);
+        guac_mem_free(current);
         current = next;
 
     }
@@ -119,14 +120,14 @@ guac_common_display* guac_common_display_alloc(guac_client* client,
         int width, int height) {
 
     /* Allocate display */
-    guac_common_display* display = malloc(sizeof(guac_common_display));
+    guac_common_display* display = guac_mem_alloc(sizeof(guac_common_display));
     if (display == NULL)
         return NULL;
 
     /* Allocate shared cursor */
     display->cursor = guac_common_cursor_alloc(client);
     if (display->cursor == NULL) {
-        free(display);
+        guac_mem_free(display);
         return NULL;
     }
 
@@ -159,26 +160,25 @@ void guac_common_display_free(guac_common_display* display) {
     guac_common_display_free_layers(display->layers, display->client);
 
     pthread_mutex_destroy(&display->_lock);
-    free(display);
+    guac_mem_free(display);
 
 }
 
-void guac_common_display_dup(guac_common_display* display, guac_user* user,
+void guac_common_display_dup(
+        guac_common_display* display, guac_client* client,
         guac_socket* socket) {
-
-    guac_client* client = user->client;
 
     pthread_mutex_lock(&display->_lock);
 
     /* Sunchronize shared cursor */
-    guac_common_cursor_dup(display->cursor, user, socket);
+    guac_common_cursor_dup(display->cursor, client, socket);
 
     /* Synchronize default surface */
-    guac_common_surface_dup(display->default_surface, user, socket);
+    guac_common_surface_dup(display->default_surface, client, socket);
 
     /* Synchronize all layers and buffers */
-    guac_common_display_dup_layers(display->layers, user, socket);
-    guac_common_display_dup_layers(display->buffers, user, socket);
+    guac_common_display_dup_layers(display->layers, client, socket);
+    guac_common_display_dup_layers(display->buffers, client, socket);
 
     /* Sends a sync instruction to mark the boundary of the first frame */
     guac_protocol_send_sync(socket, client->last_sent_timestamp, 1);
@@ -256,7 +256,7 @@ static guac_common_display_layer* guac_common_display_add_layer(
     guac_common_display_layer* old_head = *head;
 
     guac_common_display_layer* display_layer =
-        malloc(sizeof(guac_common_display_layer));
+        guac_mem_alloc(sizeof(guac_common_display_layer));
 
     /* Init layer/surface pair */
     display_layer->layer = layer;
@@ -365,7 +365,7 @@ void guac_common_display_free_layer(guac_common_display* display,
     guac_client_free_layer(display->client, display_layer->layer);
 
     /* Free list element */
-    free(display_layer);
+    guac_mem_free(display_layer);
 
     pthread_mutex_unlock(&display->_lock);
 
@@ -384,7 +384,7 @@ void guac_common_display_free_buffer(guac_common_display* display,
     guac_client_free_buffer(display->client, display_buffer->layer);
 
     /* Free list element */
-    free(display_buffer);
+    guac_mem_free(display_buffer);
 
     pthread_mutex_unlock(&display->_lock);
 

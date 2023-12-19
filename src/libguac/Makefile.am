@@ -29,6 +29,10 @@ ACLOCAL_AMFLAGS = -I m4
 lib_LTLIBRARIES = libguac.la
 SUBDIRS = . tests
 
+#
+# Public headers
+#
+
 libguacincdir = $(includedir)/guacamole
 
 libguacinc_HEADERS =                  \
@@ -48,6 +52,7 @@ libguacinc_HEADERS =                  \
     guacamole/hash.h                  \
     guacamole/layer.h                 \
     guacamole/layer-types.h           \
+    guacamole/mem.h                   \
     guacamole/object.h                \
     guacamole/object-types.h          \
     guacamole/parser-constants.h      \
@@ -61,6 +66,7 @@ libguacinc_HEADERS =                  \
     guacamole/protocol-constants.h    \
     guacamole/protocol-types.h        \
     guacamole/recording.h             \
+    guacamole/rwlock.h                \
     guacamole/socket-constants.h      \
     guacamole/socket.h                \
     guacamole/socket-fntypes.h        \
@@ -78,13 +84,26 @@ libguacinc_HEADERS =                  \
     guacamole/wol.h                   \
     guacamole/wol-constants.h
 
-noinst_HEADERS =      \
-    id.h              \
-    encode-jpeg.h     \
-    encode-png.h      \
-    palette.h         \
-    user-handlers.h   \
-    raw_encoder.h     \
+#
+# Private, installed headers
+#
+
+libguacprivincdir = $(includedir)/guacamole/private
+
+libguacprivinc_HEADERS =              \
+    guacamole/private/mem.h
+
+#
+# Private, non-installed headers
+#
+
+noinst_HEADERS =       \
+    id.h               \
+    encode-jpeg.h      \
+    encode-png.h       \
+    palette.h          \
+    user-handlers.h    \
+    raw_encoder.h      \
     wait-fd.h
 
 libguac_la_SOURCES =   \
@@ -97,6 +116,8 @@ libguac_la_SOURCES =   \
     fips.c             \
     hash.c             \
     id.c               \
+    mem.c              \
+    rwlock.c           \
     palette.c          \
     parser.c           \
     pool.c             \
@@ -139,7 +160,7 @@ libguac_la_CFLAGS = \
     -Werror -Wall -pedantic
 
 libguac_la_LDFLAGS =     \
-    -version-info 22:0:1 \
+    -version-info 23:0:0 \
     -no-undefined        \
     @CAIRO_LIBS@         \
     @DL_LIBS@            \

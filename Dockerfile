@@ -26,6 +26,7 @@ ARG ALPINE_BASE_IMAGE=latest
 FROM alpine:${ALPINE_BASE_IMAGE} AS builder
 
 # Install build dependencies
+RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing openssl1.1-compat-dev
 RUN apk add --no-cache                \
         autoconf                      \
         automake                      \
@@ -40,7 +41,6 @@ RUN apk add --no-cache                \
         libtool                       \
         libwebp-dev                   \
         make                          \
-        openssl1.1-compat-dev         \
         pango-dev                     \
         pulseaudio-dev                \
         util-linux-dev
@@ -167,6 +167,7 @@ ENV GUACD_LOG_LEVEL=info
 COPY --from=builder ${PREFIX_DIR} ${PREFIX_DIR}
 
 # Bring runtime environment up to date and install runtime dependencies
+RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing libssl1.1 libcrypto1.1
 RUN apk add --no-cache                \
         ca-certificates               \
         ghostscript                   \
